@@ -1,0 +1,19 @@
+# 工具与源码包（远程机器上由 01_setup_tools.sh 生成，不入库）
+tools/
+
+# 大文件测试数据（远程下载，只入库校验和）
+workloads/silesia.tar
+workloads/silesia.zip
+workloads/*.bin
+
+# fio 测试文件
+*.fio.tmp
+fio-test-*
+
+# 结果：raw 里的大体积原始输出按需清理，jsonl/txt 记录入库
+results/raw/**/*.tar
+results/raw/**/*.img
+
+# 杂项
+.DS_Store
+__pycache__/
