@@ -29,6 +29,7 @@ lscpu -e                         > "$ENV_DIR/lscpu_topology.txt"
 numactl --hardware                > "$ENV_DIR/numactl.txt"
 grep -r . /sys/devices/system/cpu/vulnerabilities/ > "$ENV_DIR/mitigations.txt"
 cat /proc/cmdline                 > "$ENV_DIR/kernel_cmdline.txt"
+grep -m1 microcode /proc/cpuinfo  > "$ENV_DIR/microcode.txt"
 cat /sys/kernel/mm/transparent_hugepage/enabled > "$ENV_DIR/thp.txt"
 dmidecode -t bios                 > "$ENV_DIR/bios.txt" 2>&1
 dmidecode -t memory | grep -E "Speed|Type:|Size|Manufacturer|Part Number" \
