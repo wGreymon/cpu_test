@@ -50,9 +50,8 @@ if [[ "$PKG" == "apt" ]]; then
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -q
     apt-get install -y -q \
-        build-essential git wget curl jq unzip xz-utils \
-        automake autoconf libtool pkg-config \
-        libnuma-dev libaio-dev libtirpc-dev \
+        build-essential git wget jq unzip xz-utils \
+        libtirpc-dev \
         numactl hwloc sysstat dmidecode ipmitool \
         linux-tools-common "linux-tools-$(uname -r)" \
         fio sysbench stress-ng rt-tests memtester zstd \
@@ -61,10 +60,9 @@ if [[ "$PKG" == "apt" ]]; then
 else
     dnf groupinstall -y -q "Development Tools" 2>/dev/null || true
     dnf install -y -q \
-        git wget curl jq unzip xz \
-        automake autoconf libtool pkgconf-pkg-config \
-        numactl numactl-devel libaio-devel libtirpc-devel \
-        hwloc sysstat dmidecode ipmitool \
+        git wget jq unzip xz \
+        libtirpc-devel \
+        numactl hwloc sysstat dmidecode ipmitool \
         perf kernel-tools \
         fio sysbench stress-ng rt-tests memtester zstd \
         edac-utils cargo \
@@ -98,13 +96,7 @@ LMBIN=$(ls -d "$SRC"/lmbench/bin/*/ 2>/dev/null | head -1)
 done
 
 # ---------------------------------------------------------------
-log "4/6 fs_mark / 7-Zip 24.08 官方版 / core-to-core-latency"
-if [[ ! -x "$BIN/fs_mark" ]]; then
-    cd "$SRC"
-    git clone -q "$GH/josefbacik/fs_mark.git" \
-        && make -C fs_mark -s && ln -sf "$SRC/fs_mark/fs_mark" "$BIN/fs_mark" \
-        || FAIL+=("fs_mark")
-fi
+log "4/6 7-Zip 24.08 官方版 / core-to-core-latency"
 if [[ ! -x "$BIN/7zz" ]]; then
     case "$ARCH" in
         x86_64)  SEVENZIP=7z2408-linux-x64.tar.xz ;;
@@ -166,21 +158,11 @@ else
             || FAIL+=("tinymembench")
     fi
 fi
-# Geekbench 6.3（CPU-07 备选，SPEC 无授权时用）
-if [[ ! -x "$BIN/geekbench6" ]]; then
-    case "$ARCH" in
-        x86_64)  GB_TAR=Geekbench-6.3.0-Linux.tar.gz;        GB_DIR=Geekbench-6.3.0-Linux ;;
-        aarch64) GB_TAR=Geekbench-6.3.0-LinuxARMPreview.tar.gz; GB_DIR=Geekbench-6.3.0-LinuxARMPreview ;;
-        *)       GB_TAR="" ;;
-    esac
-    if [[ -n "$GB_TAR" ]]; then
-        cd "$SRC"
-        $WGET "https://cdn.geekbench.com/$GB_TAR" \
-            && tar xf "$GB_TAR" \
-            && ln -sf "$SRC/$GB_DIR/geekbench6" "$BIN/geekbench6" \
-            || warn "Geekbench 下载失败（可选项，不影响其他测试）"
-    fi
-fi
+# 按需再装的可选工具（本脚本不安装）：
+#   Geekbench 6（CPU-07 备选，确认无 SPEC 授权后再装）:
+#     wget https://cdn.geekbench.com/Geekbench-6.3.0-Linux.tar.gz && tar xf ... （ARM 用 LinuxARMPreview 包）
+#   fs_mark（OS-06 小文件补充测试）:
+#     git clone https://github.com/josefbacik/fs_mark && make
 
 # ---------------------------------------------------------------
 log "版本清单 → $TOOLS/VERSIONS.txt"
@@ -205,7 +187,6 @@ log "版本清单 → $TOOLS/VERSIONS.txt"
     echo "unixbench: 5.1.3 ($SRC/byte-unixbench-5.1.3)"
     echo "stream:    5.10, $(cat "$TOOLS/stream_build.txt" 2>/dev/null || echo '未编译')"
     echo "c2c:       $("$BIN/core-to-core-latency" --version 2>/dev/null || echo '未安装')"
-    echo "geekbench: $("$BIN/geekbench6" --version 2>/dev/null | head -1 || echo '未安装（可选）')"
     echo "silesia:   $(cat "$ROOT_DIR/workloads/silesia.tar.sha256" 2>/dev/null || echo '未下载')"
 } | tee "$TOOLS/VERSIONS.txt"
 
