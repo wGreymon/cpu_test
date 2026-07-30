@@ -39,6 +39,7 @@ cat /proc/interrupts              > "$ENV_DIR/interrupts_before.txt"
 free -b                           > "$ENV_DIR/memory.txt"
 edac-util --report=full           > "$ENV_DIR/edac_before.txt" 2>&1 || true
 ipmitool dcmi power reading       > "$ENV_DIR/idle_power.txt" 2>&1 || echo "ipmitool 不可用" > "$ENV_DIR/idle_power.txt"
+cp "$ROOT_DIR/tools/VERSIONS.txt"   "$ENV_DIR/versions.txt" 2>/dev/null || echo "先运行 01_setup_tools.sh" > "$ENV_DIR/versions.txt"
 
 echo "==> 3. 空闲率检查（1 分钟，要求 >98%）"
 IDLE=$(mpstat 6 10 | awk '/Average/ {print $NF}')
