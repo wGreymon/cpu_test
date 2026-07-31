@@ -105,9 +105,12 @@ if [[ ! -x "$BIN/7zz" ]]; then
     esac
     if [[ -n "$SEVENZIP" ]]; then
         cd "$SRC" && mkdir -p 7zip && cd 7zip
-        $WGET "https://www.7-zip.org/a/$SEVENZIP" \
-            && tar xf "$SEVENZIP" && ln -sf "$PWD/7zz" "$BIN/7zz" \
-            || FAIL+=("7-Zip 24.08")
+        # 优先使用仓库自带的安装包（workloads/dist/），没有才下载
+        [[ -f "$ROOT_DIR/workloads/dist/$SEVENZIP" ]] \
+            && cp "$ROOT_DIR/workloads/dist/$SEVENZIP" . \
+            || $WGET "https://www.7-zip.org/a/$SEVENZIP"
+        tar xf "$SEVENZIP" 2>/dev/null && ln -sf "$PWD/7zz" "$BIN/7zz" \
+            || FAIL+=("7-Zip 24.08：在网络快的机器下载 https://www.7-zip.org/a/$SEVENZIP 放到 workloads/dist/ 后重跑")
     else warn "未知架构 $ARCH，跳过 7-Zip"; fi
 fi
 if [[ ! -x "$TOOLS/bin/core-to-core-latency" ]]; then
@@ -154,9 +157,16 @@ if [[ "$ARCH" == "x86_64" ]]; then
     log "6/6 Intel MLC v3.11（x86 专用；尝试自动下载，失败则手动）"
     if [[ ! -x "$BIN/mlc" ]]; then
         cd "$SRC" && mkdir -p mlc && cd mlc
-        $WGET https://downloadmirror.intel.com/793041/mlc_v3.11.tgz \
-            && tar xf mlc_v3.11.tgz && ln -sf "$PWD/Linux/mlc" "$BIN/mlc" \
-            || FAIL+=("Intel MLC：请到 intel.com 搜索 'Memory Latency Checker' 手动下载 mlc_v3.11.tgz，解压后把 Linux/mlc 链接到 $BIN/")
+        # 使用仓库自带的安装包（workloads/dist/mlc_v*.tgz，版本以实际文件为准）
+        # Intel 直链编号每版失效，不提供自动下载；获取方式见
+        # https://www.intel.com/content/www/us/en/developer/articles/tool/intelr-memory-latency-checker.html
+        MLC_PKG=$(ls "$ROOT_DIR"/workloads/dist/mlc_v*.tgz 2>/dev/null | head -1)
+        if [[ -n "$MLC_PKG" ]]; then
+            tar xf "$MLC_PKG" -C . 2>/dev/null && ln -sf "$PWD/Linux/mlc" "$BIN/mlc" \
+                || FAIL+=("Intel MLC：$MLC_PKG 解压失败，检查包完整性")
+        else
+            FAIL+=("Intel MLC：从官网下载 mlc_v*.tgz 放到 workloads/dist/ 后重跑（浏览器访问上面注释里的页面）")
+        fi
     fi
 else
     log "6/6 tinymembench（ARM 平台的 MLC 替代）"
