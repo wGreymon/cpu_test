@@ -120,9 +120,14 @@ fi
 log "5/6 STREAM 5.10（按本机 L3=${L3_MIB}MiB 定制编译）+ Silesia 数据集"
 if [[ ! -x "$BIN/stream" ]]; then
     cd "$SRC"
-    [[ -f stream.c ]] || $WGET https://www.cs.virginia.edu/stream/FTP/Code/stream.c -O stream.c \
-        || FAIL+=("stream.c 下载")
-    if [[ -f stream.c ]]; then
+    # 校验内容而非仅存在性：下载失败会留下空文件
+    if ! grep -q "STREAM" stream.c 2>/dev/null; then
+        rm -f stream.c
+        $WGET https://raw.githubusercontent.com/jeffhammond/STREAM/master/stream.c -O stream.c \
+            && grep -q "STREAM" stream.c \
+            || { rm -f stream.c; FAIL+=("stream.c 下载"); }
+    fi
+    if [[ -s stream.c ]]; then
         gcc -O3 -fopenmp $MCMODEL \
             -DSTREAM_ARRAY_SIZE=$STREAM_SIZE -DNTIMES=20 \
             stream.c -o "$BIN/stream" \
@@ -132,10 +137,16 @@ if [[ ! -x "$BIN/stream" ]]; then
 fi
 if [[ ! -f "$ROOT_DIR/workloads/silesia.tar" ]]; then
     cd "$ROOT_DIR/workloads"
-    $WGET https://sun.aei.polsl.pl/~sdeor/corpus/silesia.zip \
-        && unzip -q silesia.zip -d silesia && tar cf silesia.tar silesia \
-        && sha256sum silesia.tar > silesia.tar.sha256 && rm -rf silesia silesia.zip \
-        || FAIL+=("Silesia 数据集（官网慢/挂时改用镜像后自行校验）")
+    # 优先使用已放置的本地 zip（scp/同步过来的），完整性校验通过才解压；
+    # 没有或损坏才从原站下载（慢，约 68MB @ 数十KB/s）
+    unzip -tq silesia.zip >/dev/null 2>&1 || {
+        rm -f silesia.zip silesia.zip.*
+        $WGET https://sun.aei.polsl.pl/~sdeor/corpus/silesia.zip -O silesia.zip
+    }
+    unzip -tq silesia.zip >/dev/null 2>&1 \
+        && rm -rf silesia && unzip -q silesia.zip -d silesia && tar cf silesia.tar silesia \
+        && sha256sum silesia.tar > silesia.tar.sha256 && rm -rf silesia \
+        || FAIL+=("Silesia 数据集：在网络快的机器下载 https://sun.aei.polsl.pl/~sdeor/corpus/silesia.zip 后放到 workloads/ 重跑")
 fi
 
 # ---------------------------------------------------------------
