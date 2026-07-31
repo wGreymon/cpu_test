@@ -10,9 +10,9 @@ workloads/*.bin
 *.fio.tmp
 fio-test-*
 
-# 结果：raw 里的大体积原始输出按需清理，jsonl/txt 记录入库
-results/raw/**/*.tar
-results/raw/**/*.img
+# 测试原始结果：由每次运行自动生成，不入库
+# 汇总后的 results/processed/ 与 reports/ 保留为可选的版本化成果
+results/raw/
 
 # 杂项
 .DS_Store
