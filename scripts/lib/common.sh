@@ -189,5 +189,23 @@ parse_lat_generic() {
 parse_unixbench_index() {
     awk '/System Benchmarks Index Score/ {print "index_score", $NF, "score"; exit}' "$1"
 }
+parse_perf_syscall() { awk '/usecs\/op/ {print "syscall_latency", $1, "us"; exit}' "$1"; }
+parse_perf_sched()   { awk '/usecs\/op/ {print "pipe_op_latency", $1, "us"; exit}' "$1"; }
+parse_spawn_p95()    { awk '/spawn_p95_us/ {print "spawn_p95", $2, "us"; exit}' "$1"; }
+parse_lat_ctx() {
+    # lat_ctx 输出（stderr）末行: "<进程数> <µs/切换>"
+    awk 'END {print "ctx_switch", $2, "us"}' "$1"
+}
+parse_lat_mem_tail() {
+    # lat_mem_rd 输出延迟曲线，末行为最大工作集（DRAM 段）: "<MB> <ns>"
+    awk 'END {print "dram_latency", $2, "ns"}' "$1"
+}
+parse_memtester() {
+    awk -v n="$(grep -c FAILURE "$1" 2>/dev/null)" \
+        'BEGIN {print "memtester_failures", n+0, "count"}' /dev/null
+}
+parse_sysbench_mem() {
+    awk '/Total operations:/ {gsub(/[()]/,""); print "ops_per_sec", $4, "ops/s"; exit}' "$1"
+}
 parse_geekbench() { echo "manual_review  "; }
 parse_none()      { echo "see_raw  "; }

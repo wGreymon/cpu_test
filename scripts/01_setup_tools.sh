@@ -202,12 +202,16 @@ log "版本清单 → $TOOLS/VERSIONS.txt"
     echo "7zz:       $("$BIN/7zz" 2>/dev/null | head -2 | tail -1)"
     echo "perf:      $(perf --version 2>/dev/null)"
     echo "turbostat: $(turbostat --version 2>&1 | head -1)"
-    echo "mlc:       $("$BIN/mlc" --version 2>&1 | head -1 || echo '未安装/非x86')"
+    MLC_VER=$("$BIN/mlc" --version 2>&1 | head -1); echo "mlc:       ${MLC_VER:-未安装/非x86}"
     echo "tinymembench: $(cat "$SRC/tinymembench/COMMIT.txt" 2>/dev/null || echo '未安装/非ARM')"
     echo "lmbench:   commit $(cat "$SRC/lmbench/LMBENCH_COMMIT.txt" 2>/dev/null || echo '未安装')"
     echo "unixbench: 5.1.3 ($SRC/byte-unixbench-5.1.3)"
     echo "stream:    5.10, $(cat "$TOOLS/stream_build.txt" 2>/dev/null || echo '未编译')"
-    echo "c2c:       $("$BIN/core-to-core-latency" --version 2>/dev/null || echo '未安装')"
+    # c2c 不支持 --version，用 cargo 安装清单取版本号
+    C2C_VER=$(CARGO_HOME="$SRC/cargo" cargo install --list --root "$TOOLS" 2>/dev/null | awk '/^core-to-core-latency/{print $2}')
+    [[ -x "$BIN/core-to-core-latency" ]] \
+        && echo "c2c:       已安装 ${C2C_VER}" \
+        || echo "c2c:       未安装"
     echo "silesia:   $(cat "$ROOT_DIR/workloads/silesia.tar.sha256" 2>/dev/null || echo '未下载')"
 } | tee "$TOOLS/VERSIONS.txt"
 
