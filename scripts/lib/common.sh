@@ -77,7 +77,10 @@ finish_test_layer() {
 
 # 判断 CPU 编号当前是否在线。cpu0 通常没有 online 文件，视为在线。
 cpu_is_online() {
-    local cpu="$1" online="/sys/devices/system/cpu/cpu${cpu}/online"
+    # Bash 会在执行 local 赋值前展开同一条命令的全部右值。
+    # set -u 下不能在同一条 local 中立即引用刚声明的 cpu。
+    local cpu="$1"
+    local online="/sys/devices/system/cpu/cpu${cpu}/online"
     [[ "$cpu" =~ ^[0-9]+$ ]] || return 1
     [[ -d "/sys/devices/system/cpu/cpu${cpu}" ]] || return 1
     [[ ! -r "$online" || "$(cat "$online")" == "1" ]]
