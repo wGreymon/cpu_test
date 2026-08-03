@@ -291,8 +291,6 @@ else
     FAIL+=("缺少 $POINTER_SRC")
 fi
 # 按需再装的可选工具（本脚本不安装）：
-#   Geekbench 6（CPU-07 备选，确认无 SPEC 授权后再装）:
-#     wget https://cdn.geekbench.com/Geekbench-6.3.0-Linux.tar.gz && tar xf ... （ARM 用 LinuxARMPreview 包）
 #   fs_mark（OS-06 小文件补充测试）:
 #     git clone https://github.com/josefbacik/fs_mark && make
 

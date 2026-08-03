@@ -514,5 +514,4 @@ parse_openssl_rsa() {
     # "rsa 2048 bits 0.00012s 0.000004s  8123.4 270123.5" → sign/s
     awk '/^rsa +2048/ {print "rsa2048_sign_per_s", $(NF-1), "sign/s"; exit}' "$1"
 }
-parse_geekbench() { echo "manual_review  "; }
 parse_none()      { echo "see_raw  "; }

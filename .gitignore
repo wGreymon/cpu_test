@@ -10,9 +10,14 @@ workloads/*.bin
 *.fio.tmp
 fio-test-*
 
-# 测试原始结果：由每次运行自动生成，不入库
-# 汇总后的 results/processed/ 与 reports/ 保留为可选的版本化成果
-results/raw/
+# 测试结果中的文本、JSON、CSV 和图表允许入库，便于跨平台汇总与追溯。
+# 仅排除不适合进入普通 Git 历史的大型二进制或归档产物。
+results/raw/**/*.tar
+results/raw/**/*.tar.gz
+results/raw/**/*.tgz
+results/raw/**/*.img
+results/raw/**/*.bin
+results/raw/**/perf.data*
 
 # 杂项
 .DS_Store

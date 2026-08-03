@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 20_cpu_tests.sh — CPU 计算及持续性能测试（CPU-01~09），规范见 PART1_TEST_SPEC.md §2/§4
 # 用法: sudo PLATFORM_ID=intel-6966p SESSION_ID=<批次> bash 20_cpu_tests.sh [CPU-01 ...]
-# 说明: CPU-03（浮点/SIMD）为可选低优先级项不在此处；CPU-07（SPEC/Geekbench）授权未定，单独处理。
+# 说明: CPU-03（浮点/SIMD）为可选低优先级项不在此处。
 #       CPU-08 时长用 STRESS_MIN 覆盖（默认 60 分钟）；CPU-09 随 CPU-02/08 自动采功耗。
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"

@@ -409,7 +409,7 @@ Agent 编排    → CPU 单核、缓存、内存
 | 进程创建与 `fork/exec` | lmbench 套件中的 `lat_proc` | 固定次数的 `/bin/true` 创建脚本 | µs/次、次/s、P50/P95/P99 |
 | 上下文切换 | lmbench 套件中的 `lat_ctx` | `perf bench sched pipe` | µs/次 |
 | 高并发调度压力 | `hackbench` | `perf sched` | 完成时间、吞吐、抖动 |
-| 系统综合表现 | `UnixBench` | SPEC CPU 子项 | 综合分和各子项分数 |
+| 系统综合表现 | `UnixBench` | lmbench、perf 的对应单项 | 综合分和各子项分数 |
 
 使用注意：
 
@@ -422,12 +422,11 @@ Agent 编排    → CPU 单核、缓存、内存
 | 性能指标 | 主要工具 | 辅助工具 | 主要结果 |
 |---|---|---|---|
 | 单线程标量/整数密集计算 | `sysbench cpu` | 7-Zip 单线程基准 | events/s、MIPS |
-| 多线程吞吐与扩展性 | `sysbench cpu`、7-Zip | SPEC CPU rate | 吞吐、加速比、并行效率 |
+| 多线程吞吐与扩展性 | `sysbench cpu`、7-Zip | 固定项目并行编译 | 吞吐、加速比、并行效率 |
 | 真实压缩与解压 | `zstd` + 固定 Silesia 数据集 | 7-Zip | 压缩/解压 MB/s、压缩率 |
-| 加密与哈希 | `openssl speed` | SPEC CPU 对应负载 | MB/s、sign/s、verify/s |
+| 加密与哈希 | `openssl speed` | HTTPS/TLS 固定连接负载 | MB/s、sign/s、verify/s |
 | 浮点与 SIMD | 固定版本的 BLAS DGEMM 或 HPL | LIKWID Bench、CoreMark-Pro | GFLOPS、向量化效率 |
 | 核间通信延迟 | `core-to-core-latency` | 自定义 ping-pong | 核对核延迟矩阵、ns |
-| 权威综合计算性能 | SPEC CPU 2017 | Geekbench 6 | 单核/整机分数、rate |
 
 这里的 `sysbench cpu` 主要反映质数计算产生的整数密集型标量负载，不能代表CPU全部计算能力。因此更准确的名称是“标量/通用计算”，并需要结合压缩、加密、编译等真实负载解释。
 
@@ -503,7 +502,7 @@ tinymembench 0.4.9 的随机延迟工作集最大只有64MiB，在大缓存服�
 ### 选择工具时的记忆要点
 
 - 微基准用于回答“为什么快或慢”，固定真实负载用于回答“实际任务谁更快”。
-- 一个工具通常只能说明一个侧面；`sysbench`、UnixBench或Geekbench都不能单独代表CPU整体性能。
+- 一个工具通常只能说明一个侧面；`sysbench` 或 UnixBench 都不能单独代表 CPU 整体性能，也不额外设置与现有分项重复的综合跑分。
 - `perf stat`是分析工具，不是主要跑分工具；`stress-ng`是压力工具，不是精确GFLOPS基准。
 - 主结果必须使用跨平台共同工具，平台专用工具只作为补充解释。
 - 工具版本、输入数据、编译参数、线程数、绑核和NUMA策略必须固定并记录。

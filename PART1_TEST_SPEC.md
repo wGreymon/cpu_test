@@ -1,16 +1,18 @@
 # 第一部分测试规范：工具、命令与判定标准
 
-> 版本：V0.5
+> 版本：V0.6
 > 配套文档：`CPU_AGENT_SANDBOX_TEST_PLAN.md` 第一部分；执行脚本：`scripts/`（10/20/30 三个执行脚本 + run_part1.sh 总控）
 > 适用对象：Linux x86_64 / ARM64 服务器
 >
-> **V0.2 变更**（按 Intel Xeon 6966P-C 首测实际执行修订）：工具版本表对齐实测（MLC v3.12、rt-tests 2.5、zstd 1.5.5、lmbench 改用 intel fork 记录 commit；fs_mark/Geekbench 改为按需）；MEM-00 适配 TB 级内存改为按 NUMA 节点抽样 + EDAC 对比；OS-06 明确 direct=1 下的测试文件大小规则；固定 Silesia 数据集 SHA-256；UnixBench 整套只跑 1 遍的例外说明。
+> **V0.2 变更**（按 Intel Xeon 6966P-C 首测实际执行修订）：工具版本表对齐实测（MLC v3.12、rt-tests 2.5、zstd 1.5.5、lmbench 改用 intel fork 记录 commit；fs_mark 改为按需）；MEM-00 适配 TB 级内存改为按 NUMA 节点抽样 + EDAC 对比；OS-06 明确 direct=1 下的测试文件大小规则；固定 Silesia 数据集 SHA-256；UnixBench 整套只跑 1 遍的例外说明。
 >
 > **V0.3 变更**（评审修订，开跑全量前）：结果目录按批次（session_id）隔离防覆盖；主成绩不带 perf 包裹、改为独立 profiling 轮；lmbench `-N` 参数修正（100→5，-N 为内部重复轮数）；百分位报告口径收紧（外层 5 次只报中位数/极差/CV）；每核归一化仅适用于整机吞吐类；mitigations 跨厂商改为"生产默认+记录+解释差异"；MEM-00 升为硬门槛（解析 ECC 计数、失败即中止）；MEM-07 曾暂定 tinymembench 为主数据（该口径已在 V0.4 被大工作集 pointer_chase 取代）；MLC 在 AMD 需实机验证的说明。二轮复查补充：profiling 轮对长耗时/自带 perf/产出覆盖类用例跳过（NO_PROFILE）；环境基线随 session 存放；run_case 汇总失败状态、解析缺值显式告警；EDAC 不可用显式标记为缺项而非 0 错误。
 >
 > **V0.4 变更**（Intel 冒烟后）：正式结构统一为 OS 能力、CPU 计算能力、数据访问能力、持续性能与能效四类；修复 OpenSSL/stress-ng 指标解析和失败传播；同一 session 固定绑核；MEM-00 常规门槛改为每节点 10GB；功耗使用独立测量窗口并校验采集器；STREAM、lmbench、tinymembench、core-to-core-latency 和 MLC 均验证锁定版本；MEM-07 改用固定种子大工作集 pointer_chase，避免 64MiB 的 tinymembench 落在服务器 LLC 内。
 >
 > **V0.5 变更**（完整性复查）：全 CPU governor 改为硬门槛并记录 perf/NMI/EPP 状态；修正 GiB 级 L3 容量解析；正式跨平台对比要求 STREAM 每数组使用相同容量；AMD 默认不要求安装 Intel MLC；支持非连续 NUMA 节点编号；单线程 STREAM 固定绑核；JSON 补齐 NUMA、框架版本及暂缺资源字段。
+>
+> **V0.6 变更**：删除 CPU-07 SPEC CPU/Geekbench 综合基准。其通用计算内容与 CPU-01～05 重合，且不能代表 OS、内存、NUMA 与真实 Agent 工具负载；后续以固定 Agent 行为回放补充真实性验证。
 > 本文档回答三个问题：每项能力**用什么工具（含版本）**、**以什么方式运行（具体命令与流程）**、**按什么标准判定和对比结果**。
 
 ## 0. 通用规范（所有用例必须遵守）
@@ -31,7 +33,6 @@
 | zstd | 1.5.5（发行版包，两平台一致即可） | 发行版包 | CPU-04 |
 | OpenSSL | 3.0.13（各平台同小版本） | 发行版包 | CPU-05 |
 | core-to-core-latency | v1.2.0 | cargo install（crates.io） | CPU-06 |
-| SPEC CPU / Geekbench | 待定（授权确认后二选一，按需安装） | SPEC / geekbench.com | CPU-07 |
 | stress-ng | 0.17.x | 发行版包 | CPU-08 |
 | turbostat | 与内核同版本 | linux-tools | CPU-08/09（x86） |
 | ipmitool | 发行版包版本 | 发行版包 | CPU-09（整机功耗） |
@@ -119,7 +120,7 @@
   ```
 - **输出与判定**：完成时间（s）。两档并发分别报告中位数与 CV；首次 CV >5% 时按协议排查干扰并用新 session 重测，若在干净环境中仍稳定复现高 CV，则将其作为调度抖动结果报告，不能删掉波动轮次来“美化”数据。
 
-## 2. CPU 计算能力（CPU-01 ~ CPU-07）
+## 2. CPU 计算能力（CPU-01 ~ CPU-06）
 
 ### CPU-01 单线程标量计算（sysbench + 7-Zip）
 
@@ -172,11 +173,6 @@
   core-to-core-latency 5000 --csv > c2c_matrix.csv
   ```
 - **输出与判定**：N×N 延迟矩阵（ns），绘制热力图。判定要点：识别拓扑分界（同簇/跨 CCD/跨 socket 的延迟台阶），并给出"最差核对/最优核对"比值——该比值大的平台，沙箱高并发时任务迁核代价更大。
-
-### CPU-07 权威综合基准（SPEC CPU 2017 或 Geekbench 6）
-
-- **方式**：有授权则跑 SPECrate 2017 Integer（base 档，统一 `-O2` 级编译配置，禁用激进调优）；无授权用 Geekbench 6（`geekbench6 --no-upload`，Pro 版离线）。
-- **输出与判定**：SPECrate int base 分（整机+每核）或 GB6 单核/多核分。GB6 结果只用于跨架构粗对比，正式报告注明其负载偏桌面场景的局限。
 
 ## 3. 数据访问能力
 
@@ -286,7 +282,7 @@ fio --name=seqread --rw=read --bs=1M --iodepth=8 --ioengine=io_uring \
 
 ## 5. 执行顺序与产出
 
-已实现为 `scripts/run_part1.sh`（10/20/30 是按实现职责拆分的三个脚本，报告按上述四类组织）。单项补测需使用新的批次，并让环境准备与测试复用同一 `SESSION_ID`，例如依次执行 `sudo SESSION_ID=retry01 bash scripts/02_prepare_state.sh intel-6966p` 和 `sudo PLATFORM_ID=intel-6966p SESSION_ID=retry01 bash scripts/10_os_tests.sh OS-02`。单平台总计约 1~1.5 个工作日（不含 SPEC）：
+已实现为 `scripts/run_part1.sh`（10/20/30 是按实现职责拆分的三个脚本，报告按上述四类组织）。单项补测需使用新的批次，并让环境准备与测试复用同一 `SESSION_ID`，例如依次执行 `sudo SESSION_ID=retry01 bash scripts/02_prepare_state.sh intel-6966p` 和 `sudo PLATFORM_ID=intel-6966p SESSION_ID=retry01 bash scripts/10_os_tests.sh OS-02`。单平台总计约 1~1.5 个工作日：
 
 ```text
 环境采集 → MEM-00（门槛） → OS-02/03/04/05（系统微基准，机器最"干净"时测）
@@ -294,12 +290,11 @@ fio --name=seqread --rw=read --bs=1M --iodepth=8 --ioengine=io_uring \
 → OS-01 → OS-06 → CPU-09 → CPU-08（持续 1 小时，放最后）
 ```
 
-CPU-07 未纳入总控：确认 SPEC 授权或 Geekbench 方案后单独执行。MEM-00 或环境门槛失败时立即中止；普通测试组失败时继续收集其余结果，但总控最终返回退出码 2，整批状态为“不完整”。
+MEM-00 或环境门槛失败时立即中止；普通测试组失败时继续收集其余结果，但总控最终返回退出码 2，整批状态为“不完整”。
 
 当前执行脚本直接产出 `results/raw/<platform_id>/<session_id>/` 下的 JSONL、每项 `command.txt`、原始输出、环境快照和功耗/监控文件。`results/processed/` 汇总文件与图表属于后处理阶段产物，生成脚本尚未实现；在实现前不得把它们写成当前批次已自动产出。
 
 ## 6. 待定事项
 
-- SPEC CPU 2017 授权是否可用（影响 CPU-07 取哪个工具）——**仍待确认**。
 - ~~整机功耗读取方式~~ 已确认：`ipmitool dcmi power reading`（Intel 机实测空闲约 554W）；AMD 机器接入后需验证其 BMC 同样可用。
 - ARM 平台 loaded latency 缺标准工具——本轮两平台均为 x86，暂不适用；未来引入 ARM 候选时再调研。
