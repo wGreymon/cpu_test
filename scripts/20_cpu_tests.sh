@@ -134,10 +134,23 @@ cpu05() {  # 加密/哈希（注意记录硬件加密指令启用情况，见 ls
 
 cpu06() {  # 核间通信延迟矩阵（本身即全对遍历，跑 1 遍，产出 CSV 供画热力图）
     require_tool core-to-core-latency || return 1
+    local iterations="${C2C_ITERATIONS:-5000}" samples="${C2C_SAMPLES:-30}"
+    local cores phys matrix
+    [[ "$iterations" =~ ^[1-9][0-9]*$ && "$samples" =~ ^[1-9][0-9]*$ ]] \
+        || { echo "ERROR: C2C_ITERATIONS/C2C_SAMPLES 必须是正整数" >&2; return 1; }
+    # 只取每个物理核的第一个在线硬件线程。若直接使用工具默认值，
+    # 192C/384T 机器会把 SMT sibling 也当作独立核，且默认 300 样本会导致异常长的运行时间。
+    cores=$(physical_cpu_list | paste -sd, -)
+    phys=$(nproc_physical)
+    [[ -n "$cores" && "$phys" =~ ^[1-9][0-9]*$ ]] \
+        || { echo "ERROR: 无法构造 CPU-06 物理核列表" >&2; return 1; }
     mkdir -p "$RESULTS_DIR/CPU-06"
-    NO_PROFILE=1 WARMUP=0 RUNS=1 run_case CPU-06-matrix 1 parse_none \
-        -- bash -c "core-to-core-latency 5000 --csv > '$RESULTS_DIR/CPU-06/c2c_matrix.csv'"   # 防 profiling 轮覆盖矩阵
-    if [[ ! -s "$RESULTS_DIR/CPU-06/c2c_matrix.csv" ]]; then
+    matrix="$RESULTS_DIR/CPU-06/c2c_matrix.csv"
+    echo "CPU-06: $phys 个物理核，$iterations 次/样本，$samples 个样本"
+    NO_PROFILE=1 WARMUP=0 RUNS=1 run_case CPU-06-matrix "$phys" parse_none \
+        -- bash -c 'core-to-core-latency "$1" "$2" --cores "$3" --csv > "$4"' \
+           _ "$iterations" "$samples" "$cores" "$matrix"   # 防 profiling 轮覆盖矩阵
+    if [[ ! -s "$matrix" ]]; then
         echo "ERROR: CPU-06 核间延迟矩阵为空" >&2
         RUN_CASE_FAILURES=$(( RUN_CASE_FAILURES + 1 ))
         return 1
