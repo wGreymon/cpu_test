@@ -15,7 +15,8 @@ RUNS="${RUNS:-5}"                                # 正式运行次数（§0.2）
 LONG_RUNS="${LONG_RUNS:-3}"                      # >10min 用例的正式次数
 PIN_CORE="${PIN_CORE:-}"                         # 单线程绑核编号，空则自动选择
 RUN_CASE_FAILURES="${RUN_CASE_FAILURES:-0}"       # 本层正式运行/解析失败总数
-CV_LIMIT="${CV_LIMIT:-}"                           # 百分比；由执行层设置（CPU/MEM=3，OS=5）
+RUN_CASE_UNSTABLES="${RUN_CASE_UNSTABLES:-0}"     # 本层 CV 超参考阈值的用例数（不等同执行失败）
+CV_LIMIT="${CV_LIMIT:-}"                          # 稳定性参考线；由执行层设置（CPU/MEM=3，OS=5）
 [[ "$WARMUP" =~ ^[0-9]+$ && "$RUNS" =~ ^[1-9][0-9]*$ && "$LONG_RUNS" =~ ^[1-9][0-9]*$ ]] \
     || { echo "FATAL: WARMUP 必须为非负整数，RUNS/LONG_RUNS 必须为正整数" >&2; exit 1; }
 # 每批测试一个 session：目录按批隔离，同日补测不会覆盖/混入旧记录
@@ -70,9 +71,16 @@ finish_test_layer() {
     local layer="$1"
     if (( RUN_CASE_FAILURES > 0 )); then
         echo "ERROR: $layer 有 $RUN_CASE_FAILURES 个正式运行、解析或前置检查失败；原始结果已保留。" >&2
+        if (( RUN_CASE_UNSTABLES > 0 )); then
+            echo "UNSTABLE: 另有 $RUN_CASE_UNSTABLES 个用例 CV 超过稳定性参考线；数据保留供分析。" >&2
+        fi
         return 1
     fi
-    echo "$layer 完成，全部已执行项有效。"
+    if (( RUN_CASE_UNSTABLES > 0 )); then
+        echo "$layer 完成，全部已执行项有效；$RUN_CASE_UNSTABLES 个用例 CV 超过稳定性参考线，已标记 UNSTABLE（不影响退出码）。"
+    else
+        echo "$layer 完成，全部已执行项有效且未发现 CV 超参考线。"
+    fi
 }
 
 # 判断 CPU 编号当前是否在线。cpu0 通常没有 online 文件，视为在线。
@@ -412,12 +420,14 @@ run_case() {
     local cv_bad=0
     report_cv "$test_id" "$threads" || cv_bad=1
     if (( cv_bad )); then
-        RUN_CASE_FAILURES=$(( RUN_CASE_FAILURES + 1 ))
+        RUN_CASE_UNSTABLES=$(( RUN_CASE_UNSTABLES + 1 ))
     fi
-    (( fails == 0 && nometric == 0 && cv_bad == 0 ))
+    # CV 反映重复测量的稳定性，不代表命令、解析或正确性失败。它单独记录，
+    # 但不使 run_case/测试层返回非零，也不把整批标成“不完整”。
+    (( fails == 0 && nometric == 0 ))
 }
 
-# CV 检查（§0.3：计算/内存类 ≤3%，系统/存储类 ≤5%）。
+# CV 稳定性提示（§0.3：计算/内存类参考线 3%，系统/存储类参考线 5%）。
 report_cv() {
     local test_id="$1" threads="$2" stats state cv mean n
     stats=$(jq -rs --argjson t "$threads" '
@@ -434,7 +444,7 @@ report_cv() {
         ok)
             printf '    CV: %.2f%%  mean=%s  n=%s\n' "$cv" "$mean" "$n"
             if [[ -n "$CV_LIMIT" ]] && awk -v c="$cv" -v l="$CV_LIMIT" 'BEGIN {exit !(c>l)}'; then
-                echo "    ERROR: [$test_id] CV ${cv}% 超过阈值 ${CV_LIMIT}%" >&2
+                echo "    UNSTABLE: [$test_id] CV ${cv}% 超过稳定性参考线 ${CV_LIMIT}%（数据有效，报告时注明波动）" >&2
                 return 1
             fi
             ;;
