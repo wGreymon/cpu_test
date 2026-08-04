@@ -63,8 +63,10 @@ GPU 只有在沙箱任务需要 CUDA、模型推理或其他并行计算时才�
 
 ```bash
 cat /etc/os-release      # 发行版名称和版本
-uname -a                 # 内核版本、架构（x86_64 / aarch64）
+uname -a                 # 内核版本、主机名和架构
+uname -m                 # 只查看架构（x86_64 / aarch64）
 cat /proc/cmdline        # 内核启动参数（含 mitigations、isolcpus 等）
+uptime                   # 运行时间和 1/5/15 分钟负载均值
 ```
 
 ### CPU
@@ -74,8 +76,9 @@ lscpu                    # 最常用：型号、插槽数、物理核/逻辑核�
                          # 缓存容量、NUMA 划分、指令集 Flags、漏洞缓解状态
 lscpu -e                 # 每个逻辑 CPU 一行：核编号、所属 socket/NUMA、在线状态
                          # （用于确定绑核编号，比如区分同一物理核的两个超线程）
-cat /proc/cpuinfo        # 每核详细信息（lscpu 的原始数据来源）
+cat /proc/cpuinfo        # 内核暴露的每个逻辑 CPU 详细信息
 lstopo-no-graphics       # 硬件拓扑树：socket → L3 → 核 → 超线程（hwloc 包）
+cpupower frequency-info  # CPU 频率驱动、governor 和可用频率策略
 ```
 
 看 lscpu 的关键字段：`Model name`（型号）、`Socket(s)` × `Core(s) per socket`（物理核数）、`Thread(s) per core`（是否开超线程）、`L3 cache`（决定 STREAM 的默认数组下限；正式对比取候选平台共同值）、`NUMA node(s)`。
@@ -85,7 +88,8 @@ lstopo-no-graphics       # 硬件拓扑树：socket → L3 → 核 → 超线程
 ```bash
 free -h                  # 总量、已用、可用
 numactl --hardware       # NUMA 节点数、每节点内存量、节点间距离矩阵
-                         # （距离 10=本地，>10=远端，差距越大 NUMA 效应越强）
+                         # （Linux 通常以 10 表示本地，其他数值是拓扑相对距离，不是延迟 ns）
+numastat                 # 各 NUMA 节点的命中、远端分配和内存分布
 sudo dmidecode -t memory # 每根内存条的型号、类型（DDR5/MRDIMM）、
                          # 实际运行频率（Speed vs Configured Speed）、厂商
 ```
@@ -93,40 +97,66 @@ sudo dmidecode -t memory # 每根内存条的型号、类型（DDR5/MRDIMM）、
 ### 存储与网络
 
 ```bash
-lsblk -o NAME,MODEL,SIZE,ROTA,TRAN   # 磁盘型号、容量、ROTA=0 是 SSD、
-                                     # TRAN 接口类型（sata/nvme）
-df -h                    # 文件系统容量与挂载点
-ifconfig 或 ip addr      # 网卡与 IP
-ethtool <网卡名>         # 网卡速率（Speed 字段）
+lsblk -o NAME,MODEL,SIZE,ROTA,TRAN,FSTYPE,MOUNTPOINTS
+                         # 磁盘型号、容量、介质、接口、文件系统与挂载点
+df -hT                   # 文件系统类型、容量和挂载点
+findmnt                  # 挂载层级、源设备和挂载参数
+ip -br link              # 网卡名称和链路状态
+ip -br addr              # 网卡与 IP（日常优先于已过时的 ifconfig）
+ip route                 # 路由与默认网关
+ss -lntup                # 正在监听的 TCP/UDP 端口及进程
+ethtool <网卡名>         # 物理网卡速率、双工和链路状态
 ```
 
 ### 固件与功耗
 
 ```bash
 sudo dmidecode -t bios   # BIOS/UEFI 版本
-sudo ipmitool dcmi power reading   # 整机实时功耗（服务器 BMC，测能效必用）
+sudo ipmitool dcmi power reading   # BMC 支持 DCMI 时读取整机功耗
 sudo ipmitool sensor     # 温度、风扇、电压传感器
 ```
+
+`ipmitool` 不存在或 BMC 不支持 DCMI 时，不能将缺失值当作 0 W；能效对比应改用厂商 BMC 接口、PDU 或外置功率计，并保证两平台采用一致口径。
 
 ### 运行状态（测试前检查）
 
 ```bash
-cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
-                         # 频率策略：测试必须是 performance，不能是 powersave
+cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null | sort -u
+                         # 检查全部 CPU 的频率策略；测试要求 performance
+                         # 若路径不存在，查看 cpupower/BIOS，不能直接假定已生效
 grep -r . /sys/devices/system/cpu/vulnerabilities/
-                         # 安全缓解措施（mitigations）状态，跨平台对比必须记录
+                         # 安全缓解措施（mitigations）状态，性能对比必须记录
 cat /sys/kernel/mm/transparent_hugepage/enabled   # 透明大页状态
 mpstat 1 10              # CPU 空闲率（sysstat 包），确认机器无干扰负载
 cat /proc/interrupts     # 每核中断计数，选绑核目标时避开中断最多的核
 who; uptime              # 谁在用机器、负载均值
-edac-util --report=full  # ECC 内存错误计数（有错说明内存条有硬件问题）
+edac-util --report=full  # ECC 报告；工具/驱动不可用时不能记为 0 错误
 ```
+
+Intel 与 AMD 的漏洞集合不同，mitigations 不要求逐项一致；两平台应采用各自生产默认安全策略，完整记录并解释差异。EDAC 中 CE 是已纠正错误，应关注测试前后是否增长；UE 是未纠正错误，一旦出现应立即停止测试并排查硬件。
+
+### 日常性能与故障定位
+
+```bash
+top                      # 实时查看整机负载和进程
+ps -eo pid,user,pcpu,pmem,cmd --sort=-pcpu | head
+                         # 按 CPU 占用列出进程
+vmstat 1                 # CPU、运行队列、内存、换页和 I/O 概览
+mpstat -P ALL 1          # 逐逻辑 CPU 使用率，发现单核热点
+pidstat -dur 1           # 定位具体进程的 CPU、内存和磁盘 I/O
+iostat -xz 1             # 磁盘延迟、队列、吞吐和利用率
+numastat -m              # 逐 NUMA 节点内存分布
+dmesg -T | tail -100     # 最近的内核、驱动和硬件信息
+journalctl -p warning -b # 本次启动以来的 warning 及更严重日志
+```
+
+排障时先用 `uptime` / `top` / `vmstat` 判断是 CPU、内存还是 I/O 方向，再用 `pidstat`、`iostat`、`numastat` 继续定位，不要只根据 load average 判定 CPU 不足。
 
 ### 记忆要点
 
 - `lscpu` + `numactl --hardware` + `free -h` 三条命令就能回答"这台机器什么规格"。
 - `dmidecode` 读的是 BIOS 的 SMBIOS 表，能看到"硬件铭牌"信息（内存条型号、频率），这是 `lscpu`/`free` 看不到的。
-- 性能测试前必查三样：governor 是否 performance、空闲率是否够高、mitigations 是否与对比机器一致。
+- 性能测试前必查：governor/频率策略、空闲率、SMT/NUMA 状态、mitigations、温度/功耗采集能力。
 
 ---
 

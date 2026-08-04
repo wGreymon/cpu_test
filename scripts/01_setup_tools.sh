@@ -31,6 +31,8 @@ STREAM_SHA="c388924eb140fda95f534cdb808ae7f1f8ebb18da41d8aec1b512a3c8d303c9b"
 TINYMEMBENCH_COMMIT="a2cf6d7e382e3aea1eb39173174d9fa28cad15f3"
 C2C_VERSION="1.2.0"
 SILESIA_TAR_SHA="5f6103f1cff22287f378f52c36c4ba9fb1fc2865edf6e0ab4206913dee65a6d6"
+# ZIP 时间戳会受解压机时区影响，顶层目录又没有原始元数据。归档前
+# 固定全部 mtime 和成员顺序，保证任意平台由同一 ZIP 生成规范 SHA-256。
 
 [[ "$(uname -s)" == "Linux" ]] || { echo "只能在 Linux 测试机上运行"; exit 1; }
 [[ "$(id -u)" == "0" ]] || { echo "需要 root（sudo bash $0）"; exit 1; }
@@ -207,11 +209,31 @@ if [[ ! -f "$ROOT_DIR/workloads/silesia.tar" ]]; then
         mkdir -p "$SILESIA_TMP/silesia"
         if unzip -tq silesia.zip >/dev/null 2>&1 \
             && unzip -q silesia.zip -d "$SILESIA_TMP/silesia" \
-            && tar cf silesia.tar -C "$SILESIA_TMP" silesia \
-            && sha256sum silesia.tar > silesia.tar.sha256; then
+            && chown -R 0:0 "$SILESIA_TMP/silesia" \
+            && chmod 0755 "$SILESIA_TMP/silesia" \
+            && chmod 0644 "$SILESIA_TMP"/silesia/* \
+            && touch -d @1785461926 "$SILESIA_TMP/silesia" \
+            && touch -d @1048155146 "$SILESIA_TMP/silesia/mr" \
+            && touch -d @1018617668 "$SILESIA_TMP/silesia/dickens" \
+            && touch -d @1017925212 "$SILESIA_TMP/silesia/x-ray" \
+            && touch -d @1025758800 "$SILESIA_TMP/silesia/ooffice" \
+            && touch -d @1022874628 "$SILESIA_TMP/silesia/mozilla" \
+            && touch -d @1018551378 "$SILESIA_TMP/silesia/osdb" \
+            && touch -d @1016930316 "$SILESIA_TMP/silesia/sao" \
+            && touch -d @1017063242 "$SILESIA_TMP/silesia/samba" \
+            && touch -d @1017049158 "$SILESIA_TMP/silesia/webster" \
+            && touch -d @1017782516 "$SILESIA_TMP/silesia/nci" \
+            && touch -d @1017787212 "$SILESIA_TMP/silesia/reymont" \
+            && touch -d @975628466 "$SILESIA_TMP/silesia/xml" \
+            && tar --no-recursion -cf silesia.tar -C "$SILESIA_TMP" \
+                silesia silesia/mr silesia/dickens silesia/x-ray \
+                silesia/ooffice silesia/mozilla silesia/osdb silesia/sao \
+                silesia/samba silesia/webster silesia/nci silesia/reymont silesia/xml \
+            && echo "$SILESIA_TAR_SHA  silesia.tar" | sha256sum -c --quiet -; then
             find "$SILESIA_TMP" -depth -mindepth 1 -delete && rmdir "$SILESIA_TMP"
         else
-            FAIL+=("Silesia 数据集：在网络快的机器下载 https://sun.aei.polsl.pl/~sdeor/corpus/silesia.zip 后放到 workloads/ 重跑；失败的临时目录保留在 $SILESIA_TMP")
+            rm -f silesia.tar silesia.tar.sha256
+            FAIL+=("Silesia 数据集：解压、归档或固定 SHA-256 校验失败；失败的临时目录保留在 $SILESIA_TMP")
         fi
     fi
 fi

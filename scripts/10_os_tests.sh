@@ -24,13 +24,28 @@ trap cleanup_fio EXIT
 trap 'cleanup_fio; exit 130' INT
 trap 'cleanup_fio; exit 143' TERM
 
-os01() {  # 系统综合基准（UnixBench 自带多轮迭代，默认整套只跑 1 遍）
+os01single() {
     local UB="$ROOT_DIR/tools/src/byte-unixbench-5.1.3/UnixBench"
     [[ -x "$UB/Run" ]] || { echo "UnixBench 缺失"; return 1; }
     NO_PROFILE=1 WARMUP=0 RUNS="${UNIXBENCH_RUNS:-1}" run_case OS-01-single 1 parse_unixbench_index \
         -- bash -c "cd '$UB' && ./Run -c 1"
-    NO_PROFILE=1 WARMUP=0 RUNS="${UNIXBENCH_RUNS:-1}" run_case OS-01-ncopy "$(nproc)" parse_unixbench_index \
-        -- bash -c "cd '$UB' && ./Run -c $(nproc)"
+}
+
+os01ncopy() {
+    local UB="$ROOT_DIR/tools/src/byte-unixbench-5.1.3/UnixBench"
+    local copies
+    [[ -x "$UB/Run" ]] || { echo "UnixBench 缺失"; return 1; }
+    # UnixBench 5.1.3 的 system 类每个子项 maxCopies=16；传入更大
+    # -c 时套件会静默跳过所有子项并且仍返回 0。
+    copies=$(nproc)
+    (( copies > 16 )) && copies=16
+    NO_PROFILE=1 WARMUP=0 RUNS="${UNIXBENCH_RUNS:-1}" run_case OS-01-ncopy "$copies" parse_unixbench_index \
+        -- bash -c "cd '$UB' && ./Run -c $copies"
+}
+
+os01() {  # 系统综合基准（UnixBench 自带多轮迭代，默认整套只跑 1 遍）
+    os01single
+    os01ncopy
 }
 
 os02() {  # 系统调用延迟（-N 为 lmbench 内部重复轮数，5 轮足够，外层再跑 5 次）

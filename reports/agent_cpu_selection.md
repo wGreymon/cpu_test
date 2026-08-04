@@ -277,6 +277,33 @@ Agent 的本地负载可以归纳为四类平台能力：
 
 > 待两个候选平台完成正式测试后补充。本部分将记录平台配置、测试条件、具体结果、差异原因以及针对不同 Agent 场景的选型结论。
 
+## 2.1 测试工具与能力项预览
+
+本次测试不使用单一综合跑分代表 Agent 性能，而是分别测量 OS 能力、CPU 计算能力、数据访问能力以及持续性能与能效。同一能力项在 Intel 和 AMD 平台上必须保持测试目标和输出指标一致；横向排名优先使用两平台共同支持的工具，厂商专属工具仅用于补充解释。
+
+| 能力类别 | 工具 | 本次负责的测试内容 | 主要输出 | 平台适用性 |
+|---|---|---|---|---|
+| OS 能力 | UnixBench | 系统综合的单副本与 16 副本表现（不用于高核数整机扩展性） | 综合指数 | Intel/AMD 共同测试 |
+| OS 能力 | lmbench `lat_syscall` | `null`/`read`/`write` 系统调用延迟 | 微秒/次 | Intel/AMD 共同测试 |
+| OS 能力 | lmbench `lat_proc` + `proc_spawn.py` | `fork`/`exec`/Shell 启动及 1000 次短进程创建 | 延迟、P95 | Intel/AMD 共同测试 |
+| OS 能力 | lmbench `lat_ctx` + `perf bench sched` | 不同进程数与工作集下的上下文切换和调度延迟 | 微秒/次 | Intel/AMD 共同测试 |
+| OS 能力 | hackbench | 常规和过载并发下的调度器与进程通信能力 | 完成时间 | Intel/AMD 共同测试 |
+| CPU 计算 | sysbench CPU + 7-Zip Benchmark | 单线程通用计算、多线程整机吞吐与扩展效率 | events/s、MIPS | Intel/AMD 共同测试 |
+| CPU 计算 | zstd + Silesia 固定数据集 | 快速档和高压缩档的单核/多核压缩与解压 | MB/s、压缩率 | Intel/AMD 共同测试 |
+| CPU 计算 | OpenSSL `speed` | SHA-256、AES-256-GCM 和 RSA-2048 的哈希、加密和签名能力 | MB/s、sign/s、verify/s | Intel/AMD 共同测试 |
+| CPU 计算 | core-to-core-latency | 物理核两两通信延迟及跨 socket/跨拓扑边界代价 | 延迟矩阵（ns） | Intel/AMD 共同测试 |
+| 数据访问 | memtester + EDAC | 分 NUMA 节点的内存正确性抽样与 ECC 计数变化 | 错误数、CE/UE | Intel/AMD 共同门槛 |
+| 数据访问 | STREAM | 单线程、多线程及 NUMA 节点组合下的顺序内存带宽 | Copy/Scale/Add/Triad GB/s | Intel/AMD 共同测试 |
+| 数据访问 | lmbench `lat_mem_rd` + numactl | 缓存—内存延迟阶梯，以及本地/远端 NUMA 访问延迟 | 延迟曲线、ns | Intel/AMD 共同测试 |
+| 数据访问 | pointer_chase + tinymembench | 超过最大 LLC 的大工作集随机访问，以及 cache/TLB 辅助曲线 | ns/访问 | Intel/AMD 共同测试 |
+| 数据访问 | Intel MLC | 空闲延迟、NUMA 延迟/带宽矩阵、峰值带宽和负载下延迟 | ns、GB/s、带宽—延迟曲线 | Intel 专属补充，不单独用于跨平台排名 |
+| 数据访问 | fio | 4 KiB 随机读与 1 MiB 顺序读，用于解释 Agent 文件 I/O 差异 | IOPS、MB/s、P95/P99 | Intel/AMD 共同测试，不归因为纯 CPU 性能 |
+| 持续性能与能效 | stress-ng + sysbench | 长时间满核负载，并比较压力前后吞吐保持率 | bogo ops/s、events/s、保持率 | Intel/AMD 共同测试 |
+| 持续性能与能效 | turbostat + BMC/IPMI | 长时负载中的频率、温度和整机功耗，以及空闲/负载能效 | MHz、°C、W、每瓦吞吐 | 两平台使用各自可用的功耗接口 |
+| 辅助分析 | `perf stat` | 在主成绩之外采集周期、指令、缓存失效和上下文切换等计数器 | 硬件/软件事件计数 | Intel/AMD 共同辅助数据 |
+
+其中，Intel MLC 提供的负载下内存延迟目前尚无完全等价的 AMD 工具。为保证能力项对齐，最终横向分析前应在两个平台上补充同一协议的跨平台“后台内存带宽负载 + pointer chase 延迟”测试；MLC 结果只作为 Intel 平台的诊断证据。CPU 浮点/SIMD 专项本轮暂未实施，因此不在本次已用工具中列出；如后续 Agent 工作负载包含本地数值计算，再补充统一的 DGEMM 或同类基准。
+
 # 3 真实 Agent 评测与行为仿真
 
 > 待补充。本部分将调研真实 Agent 性能评测工具，并设计固定、可复现的 Agent 行为回放，用于验证基础硬件测试与实际 Agent 任务性能之间的关系。
